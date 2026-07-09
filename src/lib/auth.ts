@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 
 const approvedAdmins = (process.env.APPROVED_ADMIN_EMAILS || "")
   .split(",")
-  .map((email) => email.trim().toLowerCase())
+  .map((email) => email.trim().replace(/^["']|["']$/g, "").toLowerCase())
   .filter(Boolean);
 
 function encryptedAdapter(): Adapter {
@@ -53,8 +53,12 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user }) {
-      const email = user.email?.toLowerCase();
+      const email = user.email?.trim().toLowerCase();
       if (!email || (approvedAdmins.length > 0 && !approvedAdmins.includes(email))) {
+        console.warn("Blocked Google sign-in for unapproved email", {
+          email,
+          approvedAdminCount: approvedAdmins.length,
+        });
         return false;
       }
 
