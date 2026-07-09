@@ -11,6 +11,51 @@ const approvedAdmins = (process.env.APPROVED_ADMIN_EMAILS || "")
   .map((email) => email.trim().replace(/^["']|["']$/g, "").toLowerCase())
   .filter(Boolean);
 
+function authLogDetails(metadata: unknown) {
+  if (metadata instanceof Error) {
+    return {
+      name: metadata.name,
+      message: metadata.message,
+      stack: metadata.stack?.split("\n").slice(0, 3).join("\n"),
+    };
+  }
+
+  if (!metadata || typeof metadata !== "object") return { metadataType: typeof metadata };
+
+  const record = metadata as Record<string, unknown>;
+  const nestedError = record.error;
+  const providerError = record.provider || record.oauth;
+
+  return {
+    message: typeof record.message === "string" ? record.message : undefined,
+    name: typeof record.name === "string" ? record.name : undefined,
+    error:
+      nestedError instanceof Error
+        ? {
+            name: nestedError.name,
+            message: nestedError.message,
+            stack: nestedError.stack?.split("\n").slice(0, 3).join("\n"),
+          }
+        : nestedError && typeof nestedError === "object"
+          ? {
+              name: (nestedError as Record<string, unknown>).name,
+              message: (nestedError as Record<string, unknown>).message,
+              code: (nestedError as Record<string, unknown>).code,
+              status: (nestedError as Record<string, unknown>).status,
+            }
+          : nestedError,
+    providerError:
+      providerError && typeof providerError === "object"
+        ? {
+            name: (providerError as Record<string, unknown>).name,
+            message: (providerError as Record<string, unknown>).message,
+            code: (providerError as Record<string, unknown>).code,
+            status: (providerError as Record<string, unknown>).status,
+          }
+        : providerError,
+  };
+}
+
 function encryptedAdapter(): Adapter {
   const base = PrismaAdapter(prisma) as Record<string, unknown> & {
     linkAccount?: (account: Record<string, unknown>) => Promise<unknown>;
@@ -89,11 +134,7 @@ export const authOptions: NextAuthOptions = {
   },
   logger: {
     error(code, metadata) {
-      console.error("NextAuth error", {
-        code,
-        message: metadata instanceof Error ? metadata.message : undefined,
-        name: metadata instanceof Error ? metadata.name : undefined,
-      });
+      console.error("NextAuth error", { code, ...authLogDetails(metadata) });
     },
     warn(code) {
       console.warn("NextAuth warning", { code });
