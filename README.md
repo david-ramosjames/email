@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Referral Merge
 
-## Getting Started
+Internal mail merge outreach for one-off or recurring professional referral campaigns. It is intentionally not a newsletter platform: the MVP emphasizes verified Gmail aliases, preview, throttling, suppression, retries, and clean send logs.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router with TypeScript
+- Postgres with Prisma
+- Google OAuth via NextAuth
+- Gmail API send-as aliases
+- BullMQ with Redis for queued throttled sending
+- Railway-ready environment variables
+
+## MVP included
+
+- Approved-admin Google login
+- Campaign creation and editing before launch
+- Paste or CSV recipient import
+- Email validation, de-dupe review, personalized preview
+- Gmail alias sync and verified-alias enforcement
+- Required test email before launch
+- BullMQ queue with configurable hourly throttling
+- Safe retries, duplicate-send prevention, high-error pause
+- Suppression list and unsubscribe page
+- Status dashboard and audit logs for major actions
+
+## Setup
+
+1. Copy `.env.example` to `.env`.
+2. Create a Google OAuth app and add these scopes:
+   - `openid`
+   - `email`
+   - `profile`
+   - `https://www.googleapis.com/auth/gmail.send`
+   - `https://www.googleapis.com/auth/gmail.settings.basic`
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `TOKEN_ENCRYPTION_KEY`, and `APPROVED_ADMIN_EMAILS`.
+4. Start Postgres and Redis, then set `DATABASE_URL` and `REDIS_URL`.
+5. Install and migrate:
+
+```bash
+npm install
+npm run prisma:migrate
+```
+
+6. Run the web app and worker in separate terminals:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run worker
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+7. Sign in, open Aliases, sync Gmail aliases, then create a campaign.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Railway
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Provision Postgres and Redis on Railway, set the variables from `.env.example`, and use:
 
-## Learn More
+- Build command: `npm run build`
+- Web start command: `npm run start`
+- Worker start command: `npm run worker`
+- Release command: `npm run prisma:deploy`
 
-To learn more about Next.js, take a look at the following resources:
+## Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Gmail only sends from aliases returned by the Gmail `sendAs` API with `verificationStatus = accepted`. Unverified aliases are displayed but disabled in the campaign editor.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open and click tracking are deliberately not implemented in the MVP. The event table is ready for transparent opt-in tracking later.

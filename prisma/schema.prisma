@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  sending
+  paused
+  completed
+}
+
+enum CampaignRecipientStatus {
+  pending
+  queued
+  sent
+  failed
+  skipped
+  unsubscribed
+}
+
+enum EmailEventType {
+  test_sent
+  queued
+  sent
+  failed
+  skipped
+  unsubscribed
+  reply
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("admin")
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  sendAliases   SendAlias[]
+  campaigns     Campaign[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("connected_google_accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model SendAlias {
+  id                 String   @id @default(cuid())
+  userId             String
+  email              String
+  displayName        String?
+  replyTo            String?
+  isDefault          Boolean  @default(false)
+  isVerified         Boolean  @default(false)
+  verificationSource String   @default("gmail_send_as")
+  lastSyncedAt       DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@unique([userId, email])
+  @@index([email])
+  @@map("send_aliases")
+}
+
+model Campaign {
+  id                   String         @id @default(cuid())
+  ownerId              String
+  sendAliasId          String?
+  name                 String
+  subjectLine          String
+  fromName             String
+  fromEmailAlias       String
+  replyToEmail         String
+  htmlBody             String         @db.Text
+  textBody             String         @db.Text
+  businessIdentity     String
+  mailingAddress       String         @db.Text
+  throttlePerHour      Int            @default(25)
+  errorRateStopPercent Int            @default(20)
+  status               CampaignStatus @default(draft)
+  testSentAt           DateTime?
+  scheduledAt          DateTime?
+  launchedAt           DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  owner               User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sendAlias           SendAlias?           @relation(fields: [sendAliasId], references: [id], onDelete: SetNull)
+  campaignRecipients  CampaignRecipient[]
+  emailEvents         EmailEvent[]
+
+  @@index([ownerId, status])
+  @@map("campaigns")
+}
+
+model Recipient {
+  id              String   @id @default(cuid())
+  email           String
+  normalizedEmail String   @unique
+  firstName       String?
+  lastName        String?
+  firmName        String?
+  city            String?
+  practiceArea    String?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaignRecipients CampaignRecipient[]
+
+  @@index([email])
+  @@map("recipients")
+}
+
+model CampaignRecipient {
+  id              String                  @id @default(cuid())
+  campaignId      String
+  recipientId     String
+  personalization Json?
+  status          CampaignRecipientStatus @default(pending)
+  gmailMessageId  String?
+  errorMessage    String?                 @db.Text
+  queuedAt        DateTime?
+  sentAt          DateTime?
+  skippedAt       DateTime?
+  unsubscribedAt  DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient Recipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  events EmailEvent[]
+
+  @@unique([campaignId, recipientId])
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
+}
+
+model SuppressionList {
+  id              String   @id @default(cuid())
+  email           String
+  normalizedEmail String   @unique
+  reason          String?
+  source          String   @default("manual")
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  @@index([email])
+  @@map("suppression_list")
+}
+
+model EmailEvent {
+  id                  String         @id @default(cuid())
+  campaignId          String?
+  campaignRecipientId String?
+  type                EmailEventType
+  metadata            Json?
+  createdAt           DateTime       @default(now())
+
+  campaign          Campaign?          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignRecipient CampaignRecipient? @relation(fields: [campaignRecipientId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, type])
+  @@index([campaignRecipientId])
+  @@map("email_events")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
