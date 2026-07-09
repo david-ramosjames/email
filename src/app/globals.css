@@ -350,6 +350,16 @@ button:disabled {
   padding: 12px 14px;
 }
 
+.auth-error {
+  border: 1px solid #e0aaa3;
+  background: #fff4f2;
+  color: var(--red);
+  border-radius: 6px;
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  line-height: 1.45;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 
-export function LoginPanel() {
+export function LoginPanel({ error }: { error?: string | null }) {
   return (
     <main className="login-page">
       <section className="login-panel">
@@ -12,6 +12,7 @@ export function LoginPanel() {
           Sign in with an approved Google Workspace account to create campaigns,
           preview personalized messages, and send through verified Gmail aliases.
         </p>
+        {error && <div className="auth-error">{error}</div>}
         <button className="primary-action" onClick={() => signIn("google", { callbackUrl: "/dashboard" })}>
           Continue with Google
         </button>
