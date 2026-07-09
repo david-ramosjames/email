@@ -87,6 +87,18 @@ export const authOptions: NextAuthOptions = {
       });
     },
   },
+  logger: {
+    error(code, metadata) {
+      console.error("NextAuth error", {
+        code,
+        message: metadata instanceof Error ? metadata.message : undefined,
+        name: metadata instanceof Error ? metadata.name : undefined,
+      });
+    },
+    warn(code) {
+      console.warn("NextAuth warning", { code });
+    },
+  },
   pages: {
     signIn: "/",
     error: "/",
