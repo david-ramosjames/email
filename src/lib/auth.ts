@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "consent select_account",
           scope: [
             "openid",
             "email",
