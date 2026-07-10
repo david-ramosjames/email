@@ -387,6 +387,51 @@ button:disabled {
   font-size: 12px;
 }
 
+.readiness-list {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcf9;
+}
+
+.readiness-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.readiness-item span {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd4cf;
+  border-radius: 999px;
+  color: #748087;
+  font-weight: 700;
+}
+
+.readiness-item.ready {
+  color: var(--ink);
+}
+
+.readiness-item.ready span {
+  background: #e3f4e8;
+  border-color: #a8d7b5;
+  color: var(--green);
+}
+
+.button-stack button.send-launch {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+  font-weight: 700;
+}
+
 .review-grid,
 .alias-grid {
   display: grid;

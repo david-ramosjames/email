@@ -146,6 +146,14 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
       { total: 0 } as Record<string, number>,
     );
   }, [selected]);
+  const pendingRecipients = stats.pending || 0;
+  const testSent = Boolean(selected?.testSentAt);
+  const canLaunch =
+    Boolean(selected) &&
+    testSent &&
+    pendingRecipients > 0 &&
+    selected?.status !== "sending" &&
+    selected?.status !== "completed";
 
   useEffect(() => {
     void refreshAll();
@@ -415,7 +423,16 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
             <div className="panel action-panel">
               <h2>Send controls</h2>
               <Stats stats={stats} />
+              <div className="readiness-list">
+                <ReadinessItem ready={Boolean(selected)} label="Campaign saved" />
+                <ReadinessItem ready={pendingRecipients > 0} label={`${pendingRecipients} pending recipients`} />
+                <ReadinessItem ready={testSent} label={testSent ? "Test email sent" : "Test email required"} />
+              </div>
               <div className="button-stack">
+                <button onClick={() => setActive("recipients")} disabled={!selected || busy}>
+                  <Users size={18} />
+                  Add recipients
+                </button>
                 <button
                   onClick={() => action(`/api/campaigns/${selected?.id}/send-test`, "Test email sent.", { to: userEmail })}
                   disabled={!selected || busy}
@@ -424,11 +441,16 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                   Send test
                 </button>
                 <button
-                  onClick={() => action(`/api/campaigns/${selected?.id}/launch`, "Campaign queued.")}
-                  disabled={!selected || busy}
+                  className={canLaunch ? "send-launch" : ""}
+                  onClick={() => {
+                    if (!window.confirm(`Queue ${pendingRecipients} pending recipients for this campaign?`)) return;
+                    void action(`/api/campaigns/${selected?.id}/launch`, "Campaign queued.");
+                  }}
+                  disabled={!canLaunch || busy}
+                  title={!canLaunch ? "Save the campaign, add recipients, and send a test first." : "Queue pending recipients"}
                 >
                   <Send size={18} />
-                  Launch queue
+                  Launch campaign
                 </button>
                 <button
                   onClick={() => action(`/api/campaigns/${selected?.id}/pause`, "Campaign paused.")}
@@ -452,9 +474,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                   Duplicate
                 </button>
               </div>
-              <p className="fine-print">
-                Launch requires a test email. Sent recipients are never queued again inside the same campaign.
-              </p>
+              <p className="fine-print">{sendStatusText(selected, stats)}</p>
             </div>
           </section>
         )}
@@ -680,6 +700,24 @@ function Stats({ stats }: { stats: Record<string, number> }) {
       ))}
     </div>
   );
+}
+
+function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
+  return (
+    <div className={ready ? "readiness-item ready" : "readiness-item"}>
+      <span>{ready ? "✓" : "•"}</span>
+      <strong>{label}</strong>
+    </div>
+  );
+}
+
+function sendStatusText(campaign: Campaign | null, stats: Record<string, number>) {
+  if (!campaign) return "Save a campaign before adding recipients or sending.";
+  if (campaign.status === "sending") return "This campaign is sending from the queue.";
+  if (campaign.status === "completed") return "This campaign is complete.";
+  if ((stats.pending || 0) === 0) return "Add recipients before launching.";
+  if (!campaign.testSentAt) return "Send a test email before launching.";
+  return "Ready to launch pending recipients. Sent recipients will not be queued again.";
 }
 
 function ImportReview({
