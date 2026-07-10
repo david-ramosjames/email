@@ -43,7 +43,7 @@ export function addComplianceFooter({
 <p style="font-size:12px;line-height:1.5;color:#536173">
   Sent by ${escapeHtml(businessIdentity)}<br />
   ${escapeHtml(mailingAddress).replace(/\n/g, "<br />")}<br />
-  To opt out, visit <a href="${unsubscribeUrl}">${unsubscribeUrl}</a> or reply with "unsubscribe".
+  To opt out, <a href="${unsubscribeUrl}">unsubscribe</a> or reply with "unsubscribe".
 </p>`;
 
   const textFooter = [
@@ -51,7 +51,7 @@ export function addComplianceFooter({
     "--",
     `Sent by ${businessIdentity}`,
     mailingAddress,
-    `To opt out, visit ${unsubscribeUrl} or reply with "unsubscribe".`,
+    `To opt out, reply with "unsubscribe" or visit: ${unsubscribeUrl}`,
   ].join("\n");
 
   return { html: `${html}\n${htmlFooter}`, text: `${text}\n${textFooter}` };

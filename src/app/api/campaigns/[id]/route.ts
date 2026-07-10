@@ -73,3 +73,32 @@ export async function PATCH(request: Request, context: Context) {
     return apiError(error);
   }
 }
+
+export async function DELETE(_request: Request, context: Context) {
+  try {
+    const session = await requireAdmin();
+    const { id } = await context.params;
+    const campaign = await prisma.campaign.findFirst({
+      where: { id, ownerId: session.user.id },
+    });
+
+    if (!campaign) throw new Error("Campaign not found.");
+    if (campaign.status === "sending") {
+      throw new Error("Pause the campaign before deleting it.");
+    }
+
+    await prisma.campaign.delete({ where: { id } });
+
+    await auditLog({
+      userId: session.user.id,
+      action: "campaign.deleted",
+      entity: "campaign",
+      entityId: id,
+      metadata: { name: campaign.name, status: campaign.status },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return apiError(error);
+  }
+}

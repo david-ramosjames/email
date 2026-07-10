@@ -17,6 +17,7 @@ import {
   Send,
   Settings,
   TestTube2,
+  Trash2,
   Users,
 } from "lucide-react";
 import { personalize, validateEmail } from "@/lib/email";
@@ -273,6 +274,29 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
     }
   }
 
+  async function deleteCampaign() {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      `Delete campaign "${selected.name}"? This removes the campaign and its send log, but keeps shared recipients and suppressions.`,
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setNotice("");
+    try {
+      await api(`/api/campaigns/${selected.id}`, { method: "DELETE" });
+      setSelected(null);
+      setSelectedId("");
+      setForm(blankCampaign);
+      await loadCampaigns();
+      setNotice("Campaign deleted.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not delete campaign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function parseRecipients(input: string) {
     const result = Papa.parse<Record<string, string>>(input, {
       header: input.includes(","),
@@ -521,6 +545,15 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                   <Copy size={18} />
                   Duplicate
                 </button>
+                <button
+                  className="danger-action"
+                  onClick={deleteCampaign}
+                  disabled={!selected || selected.status === "sending" || busy}
+                  title={selected?.status === "sending" ? "Pause this campaign before deleting it." : "Delete campaign"}
+                >
+                  <Trash2 size={18} />
+                  Delete campaign
+                </button>
               </div>
               <p className="fine-print">{sendStatusText(selected, stats)}</p>
               <SendProgress
@@ -711,10 +744,26 @@ function CampaignEditor({
             onChange={(event) => setField("throttlePerHour", Number(event.target.value))}
           />
         </label>
-        <label className="wide">
-          HTML body
+        <div className="form-field wide">
+          <div className="label-row">
+            <span>HTML body</span>
+            <label className="file-button small-file-button">
+              <FileUp size={16} />
+              Upload HTML
+              <input
+                type="file"
+                accept=".html,.htm,text/html"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setField("htmlBody", await file.text());
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
           <textarea value={form.htmlBody} onChange={(event) => setField("htmlBody", event.target.value)} />
-        </label>
+        </div>
         <label className="wide">
           Plain text fallback
           <textarea value={form.textBody} onChange={(event) => setField("textBody", event.target.value)} />

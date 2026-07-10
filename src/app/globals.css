@@ -262,12 +262,20 @@ a {
   gap: 12px;
 }
 
-label {
+label,
+.form-field {
   display: grid;
   gap: 6px;
   color: #394246;
   font-size: 13px;
   font-weight: 700;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .wide {
@@ -340,6 +348,12 @@ button:disabled {
 
 .file-button input {
   display: none;
+}
+
+.small-file-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .notice {
@@ -430,6 +444,16 @@ button:disabled {
   border-color: var(--teal);
   color: #fff;
   font-weight: 700;
+}
+
+.button-stack button.danger-action {
+  border-color: #e0aaa3;
+  background: #fff4f2;
+  color: var(--red);
+}
+
+.button-stack button.danger-action:hover {
+  border-color: var(--red);
 }
 
 .sender-summary {
