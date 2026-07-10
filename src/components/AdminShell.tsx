@@ -206,7 +206,13 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   }
 
   function setField(key: keyof typeof form, value: string | number) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (key === "fromEmailAlias" && typeof value === "string" && !current.replyToEmail) {
+        return { ...current, fromEmailAlias: value, replyToEmail: value };
+      }
+
+      return { ...current, [key]: value };
+    });
   }
 
   async function saveCampaign() {

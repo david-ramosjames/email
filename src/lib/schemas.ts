@@ -5,7 +5,7 @@ export const campaignSchema = z.object({
   subjectLine: z.string().min(1),
   fromName: z.string().min(1),
   fromEmailAlias: z.string().email(),
-  replyToEmail: z.string().email(),
+  replyToEmail: z.union([z.string().email(), z.literal("")]).optional(),
   htmlBody: z.string().min(1),
   textBody: z.string().min(1),
   businessIdentity: z.string().min(1),
@@ -13,6 +13,32 @@ export const campaignSchema = z.object({
   throttlePerHour: z.coerce.number().int().min(1).max(50).default(25),
   errorRateStopPercent: z.coerce.number().int().min(1).max(100).default(20),
 });
+
+export const campaignPatchSchema = campaignSchema.partial();
+
+export function normalizeCampaignInput(input: z.infer<typeof campaignSchema>) {
+  return {
+    ...input,
+    fromEmailAlias: input.fromEmailAlias.toLowerCase(),
+    replyToEmail: input.replyToEmail?.trim() || input.fromEmailAlias.toLowerCase(),
+  };
+}
+
+export function normalizeCampaignPatchInput(
+  input: z.infer<typeof campaignPatchSchema>,
+) {
+  const normalized = { ...input };
+
+  if (normalized.fromEmailAlias) {
+    normalized.fromEmailAlias = normalized.fromEmailAlias.toLowerCase();
+  }
+
+  if (normalized.replyToEmail === "" && normalized.fromEmailAlias) {
+    normalized.replyToEmail = normalized.fromEmailAlias;
+  }
+
+  return normalized;
+}
 
 export const recipientSchema = z.object({
   email: z.string().email(),

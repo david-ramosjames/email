@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
-import { campaignSchema } from "@/lib/schemas";
+import { campaignSchema, normalizeCampaignInput } from "@/lib/schemas";
 import { requireAdmin } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
@@ -39,7 +39,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireAdmin();
-    const body = campaignSchema.parse(await request.json());
+    const body = normalizeCampaignInput(campaignSchema.parse(await request.json()));
     const alias = await prisma.sendAlias.findFirst({
       where: {
         userId: session.user.id,
@@ -57,7 +57,6 @@ export async function POST(request: Request) {
         ownerId: session.user.id,
         sendAliasId: alias.id,
         ...body,
-        fromEmailAlias: body.fromEmailAlias.toLowerCase(),
       },
     });
 
