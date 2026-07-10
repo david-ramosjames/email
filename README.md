@@ -58,14 +58,14 @@ By default, Gmail sending uses the signed-in admin's Google OAuth tokens. That w
 To send as `laura.james@ramosjames.com` without logging in as Laura, configure Google Workspace domain-wide delegation:
 
 1. Create a Google Cloud service account and enable **Domain-wide delegation** on it.
-2. In Google Workspace Admin, authorize the service account client ID for these OAuth scopes:
+2. Copy the service account's numeric **OAuth 2 Client ID**. This is not the service account email.
+3. In Google Workspace Admin, authorize that numeric client ID for these exact OAuth scopes:
 
 ```text
-https://www.googleapis.com/auth/gmail.send
-https://www.googleapis.com/auth/gmail.settings.basic
+https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.settings.basic
 ```
 
-3. Set these environment variables:
+4. Set these environment variables:
 
 ```env
 GOOGLE_SERVICE_ACCOUNT_EMAIL="service-account-name@project-id.iam.gserviceaccount.com"
@@ -73,10 +73,12 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END P
 GOOGLE_WORKSPACE_IMPERSONATED_USER="laura.james@ramosjames.com"
 ```
 
-4. Redeploy, sign in as an approved admin, open **Aliases**, and click **Sync from Gmail**.
-5. Choose `laura.james@ramosjames.com` as the campaign sender.
+5. Redeploy, sign in as an approved admin, open **Aliases**, and click **Sync from Gmail**.
+6. Choose `laura.james@ramosjames.com` as the campaign sender.
 
 When these three service-account variables are present, alias sync and Gmail sends run as the impersonated Workspace user. Login still uses `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+The service account used by Docket Flow for Google Sheets may not be authorized for Gmail. Sheets can work by sharing a spreadsheet with the service account, while Gmail impersonation requires domain-wide delegation and Gmail scopes in Workspace Admin.
 
 ## Railway
 

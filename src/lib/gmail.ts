@@ -85,7 +85,26 @@ export async function delegatedGmailClient() {
     subject: config.delegatedUser,
   });
 
-  await auth.authorize();
+  try {
+    await auth.authorize();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Google authorization error";
+
+    if (message.includes("unauthorized_client")) {
+      throw new Error(
+        [
+          "Google Workspace rejected delegated Gmail access.",
+          "The service account key may work for Sheets, but Gmail requires Workspace Admin domain-wide delegation for these exact scopes:",
+          gmailScopes.join(","),
+          `Impersonated user: ${config.delegatedUser}`,
+          "In admin.google.com, authorize the service account's numeric OAuth client ID, not the service account email.",
+          `Original Google error: ${message}`,
+        ].join(" "),
+      );
+    }
+
+    throw error;
+  }
 
   return google.gmail({ version: "v1", auth });
 }
