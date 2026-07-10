@@ -3,10 +3,8 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { decryptToken, encryptToken } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 
-const gmailScopes = [
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/gmail.settings.basic",
-];
+const gmailSendScopes = ["https://www.googleapis.com/auth/gmail.send"];
+const gmailAliasScopes = ["https://www.googleapis.com/auth/gmail.settings.basic"];
 
 function cleanEnv(value?: string) {
   return value?.trim().replace(/^["']|["']$/g, "") || "";
@@ -24,6 +22,16 @@ export function workspaceDelegationConfig() {
   if (!clientEmail || !privateKey || !delegatedUser) return null;
 
   return { clientEmail, privateKey, delegatedUser };
+}
+
+function configuredWorkspaceSendAliases() {
+  const config = workspaceDelegationConfig();
+  const envAliases = cleanEnv(process.env.GOOGLE_WORKSPACE_SEND_AS_ALIASES)
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  return Array.from(new Set([config?.delegatedUser, ...envAliases].filter(Boolean) as string[]));
 }
 
 export function isWorkspaceDelegationEnabled() {
@@ -69,7 +77,7 @@ export async function gmailClientForUser(userId: string) {
   return google.gmail({ version: "v1", auth: oauth2 });
 }
 
-export async function delegatedGmailClient() {
+export async function delegatedGmailClient(scopes = gmailSendScopes) {
   const config = workspaceDelegationConfig();
 
   if (!config) {
@@ -81,7 +89,7 @@ export async function delegatedGmailClient() {
   const auth = new google.auth.JWT({
     email: config.clientEmail,
     key: config.privateKey,
-    scopes: gmailScopes,
+    scopes,
     subject: config.delegatedUser,
   });
 
@@ -95,7 +103,7 @@ export async function delegatedGmailClient() {
         [
           "Google Workspace rejected delegated Gmail access.",
           "The service account key may work for Sheets, but Gmail requires Workspace Admin domain-wide delegation for these exact scopes:",
-          gmailScopes.join(","),
+          scopes.join(","),
           `Impersonated user: ${config.delegatedUser}`,
           "In admin.google.com, authorize the service account's numeric OAuth client ID, not the service account email.",
           `Original Google error: ${message}`,
@@ -111,21 +119,95 @@ export async function delegatedGmailClient() {
 
 async function gmailClientForSending(userId: string) {
   if (isWorkspaceDelegationEnabled()) {
-    return delegatedGmailClient();
+    return delegatedGmailClient(gmailSendScopes);
   }
 
   return gmailClientForUser(userId);
 }
 
+async function saveConfiguredWorkspaceAliases(userId: string) {
+  const aliases = configuredWorkspaceSendAliases();
+
+  return Promise.all(
+    aliases.map((email, index) =>
+      prisma.sendAlias.upsert({
+        where: {
+          userId_email: {
+            userId,
+            email,
+          },
+        },
+        update: {
+          isDefault: index === 0,
+          isVerified: true,
+          verificationSource: "workspace_configured_alias",
+          lastSyncedAt: new Date(),
+        },
+        create: {
+          userId,
+          email,
+          displayName: email.split("@")[0]?.replace(".", " ") || email,
+          isDefault: index === 0,
+          isVerified: true,
+          verificationSource: "workspace_configured_alias",
+        },
+      }),
+    ),
+  );
+}
+
 export async function syncSendAliases(userId: string) {
-  const gmail = isWorkspaceDelegationEnabled()
-    ? await delegatedGmailClient()
-    : await gmailClientForUser(userId);
+  if (isWorkspaceDelegationEnabled()) {
+    try {
+      const gmail = await delegatedGmailClient(gmailAliasScopes);
+      const response = await gmail.users.settings.sendAs.list({ userId: "me" });
+      const aliases = response.data.sendAs || [];
+
+      const saved = await Promise.all(
+        aliases
+          .filter((alias) => Boolean(alias.sendAsEmail))
+          .map((alias) =>
+            prisma.sendAlias.upsert({
+              where: {
+                userId_email: {
+                  userId,
+                  email: (alias.sendAsEmail || "").toLowerCase(),
+                },
+              },
+              update: {
+                displayName: alias.displayName,
+                replyTo: alias.replyToAddress,
+                isDefault: Boolean(alias.isDefault),
+                isVerified: alias.verificationStatus === "accepted",
+                verificationSource: "workspace_domain_wide_delegation",
+                lastSyncedAt: new Date(),
+              },
+              create: {
+                userId,
+                email: (alias.sendAsEmail || "").toLowerCase(),
+                displayName: alias.displayName,
+                replyTo: alias.replyToAddress,
+                isDefault: Boolean(alias.isDefault),
+                isVerified: alias.verificationStatus === "accepted",
+                verificationSource: "workspace_domain_wide_delegation",
+              },
+            }),
+          ),
+      );
+
+      return saved.filter((alias) => Boolean(alias.email));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("unauthorized_client")) {
+        return saveConfiguredWorkspaceAliases(userId);
+      }
+      throw error;
+    }
+  }
+
+  const gmail = await gmailClientForUser(userId);
   const response = await gmail.users.settings.sendAs.list({ userId: "me" });
   const aliases = response.data.sendAs || [];
-  const verificationSource = isWorkspaceDelegationEnabled()
-    ? "workspace_domain_wide_delegation"
-    : "gmail_send_as";
 
   const saved = await Promise.all(
     aliases
@@ -143,7 +225,7 @@ export async function syncSendAliases(userId: string) {
             replyTo: alias.replyToAddress,
             isDefault: Boolean(alias.isDefault),
             isVerified: alias.verificationStatus === "accepted",
-            verificationSource,
+            verificationSource: "gmail_send_as",
             lastSyncedAt: new Date(),
           },
           create: {
@@ -153,7 +235,7 @@ export async function syncSendAliases(userId: string) {
             replyTo: alias.replyToAddress,
             isDefault: Boolean(alias.isDefault),
             isVerified: alias.verificationStatus === "accepted",
-            verificationSource,
+            verificationSource: "gmail_send_as",
           },
         }),
       ),
@@ -172,6 +254,28 @@ export async function assertVerifiedAlias(userId: string, email: string) {
   });
 
   if (!alias) {
+    if (isWorkspaceDelegationEnabled() && configuredWorkspaceSendAliases().includes(email.toLowerCase())) {
+      return prisma.sendAlias.upsert({
+        where: {
+          userId_email: {
+            userId,
+            email: email.toLowerCase(),
+          },
+        },
+        update: {
+          isVerified: true,
+          verificationSource: "workspace_configured_alias",
+          lastSyncedAt: new Date(),
+        },
+        create: {
+          userId,
+          email: email.toLowerCase(),
+          isVerified: true,
+          verificationSource: "workspace_configured_alias",
+        },
+      });
+    }
+
     throw new Error("That sender alias is not verified for this Google Workspace account.");
   }
 

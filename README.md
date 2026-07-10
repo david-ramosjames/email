@@ -71,6 +71,7 @@ https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail
 GOOGLE_SERVICE_ACCOUNT_EMAIL="service-account-name@project-id.iam.gserviceaccount.com"
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 GOOGLE_WORKSPACE_IMPERSONATED_USER="laura.james@ramosjames.com"
+GOOGLE_WORKSPACE_SEND_AS_ALIASES="laura.james@ramosjames.com"
 ```
 
 5. Redeploy, sign in as an approved admin, open **Aliases**, and click **Sync from Gmail**.
@@ -79,6 +80,8 @@ GOOGLE_WORKSPACE_IMPERSONATED_USER="laura.james@ramosjames.com"
 When these three service-account variables are present, alias sync and Gmail sends run as the impersonated Workspace user. Login still uses `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 The service account used by Docket Flow for Google Sheets may not be authorized for Gmail. Sheets can work by sharing a spreadsheet with the service account, while Gmail impersonation requires domain-wide delegation and Gmail scopes in Workspace Admin.
+
+If your Workspace Admin only authorizes `gmail.send`, sending can work but live alias discovery through Gmail settings will fail. In that case, set `GOOGLE_WORKSPACE_SEND_AS_ALIASES` to the mailbox or verified send-as aliases the app is allowed to use. The **Aliases** sync button will save those configured aliases when Gmail settings access is unavailable.
 
 ## Railway
 
