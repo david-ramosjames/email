@@ -46,6 +46,10 @@ type CampaignRecipient = {
   status: string;
   gmailMessageId?: string | null;
   errorMessage?: string | null;
+  queuedAt?: string | null;
+  sentAt?: string | null;
+  skippedAt?: string | null;
+  updatedAt?: string | null;
   recipient: {
     email: string;
     firstName?: string | null;
@@ -123,6 +127,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   const [suppressionEmail, setSuppressionEmail] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const selectedRecipient = selected?.campaignRecipients?.[previewIndex];
   const previewFields = selectedRecipient
@@ -165,6 +170,19 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  useEffect(() => {
+    const shouldPoll = selectedId && (selected?.status === "sending" || (stats.queued || 0) > 0);
+    if (!shouldPoll) return;
+
+    const timer = window.setInterval(() => {
+      void loadCampaign(selectedId);
+      void loadCampaigns();
+    }, 10_000);
+
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, selected?.status, stats.queued]);
+
   async function refreshAll() {
     await Promise.all([loadCampaigns(), loadAliases(), loadSuppressions()]);
   }
@@ -188,6 +206,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   async function loadCampaign(id: string) {
     const data = await api(`/api/campaigns/${id}`);
     setSelected(data.campaign);
+    setLastUpdatedAt(new Date());
     setForm({
       name: data.campaign.name,
       subjectLine: data.campaign.subjectLine,
@@ -475,6 +494,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                 </button>
               </div>
               <p className="fine-print">{sendStatusText(selected, stats)}</p>
+              <SendProgress campaign={selected} stats={stats} lastUpdatedAt={lastUpdatedAt} />
             </div>
           </section>
         )}
@@ -713,11 +733,65 @@ function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
 
 function sendStatusText(campaign: Campaign | null, stats: Record<string, number>) {
   if (!campaign) return "Save a campaign before adding recipients or sending.";
-  if (campaign.status === "sending") return "This campaign is sending from the queue.";
+  if (campaign.status === "sending") return "This campaign is active. Queued recipients are waiting for the worker.";
   if (campaign.status === "completed") return "This campaign is complete.";
+  if ((stats.queued || 0) > 0) return "Queued means the worker has not processed those recipients yet.";
   if ((stats.pending || 0) === 0) return "Add recipients before launching.";
   if (!campaign.testSentAt) return "Send a test email before launching.";
   return "Ready to launch pending recipients. Sent recipients will not be queued again.";
+}
+
+function SendProgress({
+  campaign,
+  stats,
+  lastUpdatedAt,
+}: {
+  campaign: Campaign | null;
+  stats: Record<string, number>;
+  lastUpdatedAt: Date | null;
+}) {
+  const total = stats.total || 0;
+  const finished =
+    (stats.sent || 0) + (stats.failed || 0) + (stats.skipped || 0) + (stats.unsubscribed || 0);
+  const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+  const recent = (campaign?.campaignRecipients || []).slice(-6).reverse();
+
+  if (!campaign || total === 0) return null;
+
+  return (
+    <div className="send-progress">
+      <div className="progress-heading">
+        <strong>Send progress</strong>
+        <span>{lastUpdatedAt ? `Updated ${lastUpdatedAt.toLocaleTimeString()}` : "Not refreshed yet"}</span>
+      </div>
+      <div className="progress-track" aria-label={`${percent}% complete`}>
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <div className="progress-copy">
+        <strong>{percent}% complete</strong>
+        <span>Auto-refreshes every 10 seconds while queued or sending.</span>
+      </div>
+      <div className="recipient-status-list">
+        {recent.map((item) => (
+          <div className="recipient-status-row" key={item.id}>
+            <div>
+              <strong>{item.recipient.email}</strong>
+              {item.errorMessage && <span>{item.errorMessage}</span>}
+              {!item.errorMessage && item.gmailMessageId && <span>{item.gmailMessageId}</span>}
+            </div>
+            <mark className={statusClass(item.status)}>{item.status}</mark>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function statusClass(status: string) {
+  if (status === "sent") return "good";
+  if (status === "failed") return "bad";
+  if (status === "queued") return "queued";
+  return "";
 }
 
 function ImportReview({

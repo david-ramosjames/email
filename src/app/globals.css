@@ -432,6 +432,69 @@ button:disabled {
   font-weight: 700;
 }
 
+.send-progress {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcf9;
+}
+
+.progress-heading,
+.progress-copy,
+.recipient-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.progress-heading span,
+.progress-copy span,
+.recipient-status-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7ece8;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  background: var(--teal);
+}
+
+.recipient-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recipient-status-row {
+  min-height: 44px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.recipient-status-row div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.recipient-status-row strong,
+.recipient-status-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .review-grid,
 .alias-grid {
   display: grid;
@@ -497,6 +560,11 @@ mark.good {
 mark.bad {
   background: #fde6e3;
   color: var(--red);
+}
+
+mark.queued {
+  background: #fff6dc;
+  color: #674910;
 }
 
 @media (max-width: 1180px) {
