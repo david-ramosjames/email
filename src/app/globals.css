@@ -471,6 +471,29 @@ button:disabled {
   background: var(--teal);
 }
 
+.worker-status {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+}
+
+.worker-status span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.worker-status.ready {
+  background: #e3f4e8;
+  border-color: #a8d7b5;
+}
+
+.worker-status.missing {
+  background: #fff6dc;
+  border-color: #d8c69e;
+}
+
 .recipient-status-list {
   display: grid;
   gap: 8px;

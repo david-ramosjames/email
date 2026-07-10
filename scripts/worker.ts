@@ -164,7 +164,7 @@ const worker = new Worker<SendJobData>(
 );
 
 worker.on("ready", () => {
-  console.log(`Worker listening on ${SEND_QUEUE_NAME}`);
+  console.log(`Referral outreach worker listening on ${SEND_QUEUE_NAME}`);
 });
 
 worker.on("failed", (job, error) => {

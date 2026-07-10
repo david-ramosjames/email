@@ -92,6 +92,8 @@ Provision Postgres and Redis on Railway, set the variables from `.env.example`, 
 - Worker start command: `npm run worker`
 - Release command: `npm run prisma:deploy`
 
+Create a separate Railway worker service from the same GitHub repo with start command `npm run worker`. The web service queues campaign recipients; the worker service is what actually sends queued Gmail messages. If recipients stay in `queued`, check that the worker service is running and uses the same `REDIS_URL` as the web service.
+
 ## Notes
 
 Gmail only sends from aliases returned by the Gmail `sendAs` API with `verificationStatus = accepted`. Unverified aliases are displayed but disabled in the campaign editor.

@@ -88,6 +88,11 @@ type Suppression = {
   createdAt: string;
 };
 
+type QueueStatus = {
+  counts: Record<string, number>;
+  workers: Array<{ id?: string; name?: string; addr?: string }>;
+};
+
 const blankCampaign = {
   name: "",
   subjectLine: "Referral introduction for {{firm_name}}",
@@ -128,6 +133,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
 
   const selectedRecipient = selected?.campaignRecipients?.[previewIndex];
   const previewFields = selectedRecipient
@@ -184,7 +190,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   }, [selectedId, selected?.status, stats.queued]);
 
   async function refreshAll() {
-    await Promise.all([loadCampaigns(), loadAliases(), loadSuppressions()]);
+    await Promise.all([loadCampaigns(), loadAliases(), loadSuppressions(), loadQueueStatus()]);
   }
 
   async function api(path: string, options?: RequestInit) {
@@ -230,6 +236,11 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   async function loadSuppressions() {
     const data = await api("/api/suppression-list");
     setSuppressions(data.suppressions);
+  }
+
+  async function loadQueueStatus() {
+    const data = await api("/api/queue/status");
+    setQueueStatus(data);
   }
 
   function setField(key: keyof typeof form, value: string | number) {
@@ -315,6 +326,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
       await api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
       await loadCampaign(selected.id);
       await loadCampaigns();
+      await loadQueueStatus();
       setNotice(success);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Action failed.");
@@ -473,14 +485,14 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                 </button>
                 <button
                   onClick={() => action(`/api/campaigns/${selected?.id}/pause`, "Campaign paused.")}
-                  disabled={!selected || busy}
+                  disabled={!selected || selected.status !== "sending" || busy}
                 >
                   <Pause size={18} />
                   Pause
                 </button>
                 <button
                   onClick={() => action(`/api/campaigns/${selected?.id}/resume`, "Campaign resumed.")}
-                  disabled={!selected || busy}
+                  disabled={!selected || selected.status !== "paused" || busy}
                 >
                   <Play size={18} />
                   Resume
@@ -494,7 +506,12 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                 </button>
               </div>
               <p className="fine-print">{sendStatusText(selected, stats)}</p>
-              <SendProgress campaign={selected} stats={stats} lastUpdatedAt={lastUpdatedAt} />
+              <SendProgress
+                campaign={selected}
+                stats={stats}
+                lastUpdatedAt={lastUpdatedAt}
+                queueStatus={queueStatus}
+              />
             </div>
           </section>
         )}
@@ -745,16 +762,20 @@ function SendProgress({
   campaign,
   stats,
   lastUpdatedAt,
+  queueStatus,
 }: {
   campaign: Campaign | null;
   stats: Record<string, number>;
   lastUpdatedAt: Date | null;
+  queueStatus: QueueStatus | null;
 }) {
   const total = stats.total || 0;
   const finished =
     (stats.sent || 0) + (stats.failed || 0) + (stats.skipped || 0) + (stats.unsubscribed || 0);
   const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
   const recent = (campaign?.campaignRecipients || []).slice(-6).reverse();
+  const workerCount = queueStatus?.workers.length || 0;
+  const queueCounts = queueStatus?.counts || {};
 
   if (!campaign || total === 0) return null;
 
@@ -770,6 +791,13 @@ function SendProgress({
       <div className="progress-copy">
         <strong>{percent}% complete</strong>
         <span>Auto-refreshes every 10 seconds while queued or sending.</span>
+      </div>
+      <div className={workerCount > 0 ? "worker-status ready" : "worker-status missing"}>
+        <strong>{workerCount > 0 ? "Worker connected" : "No worker connected"}</strong>
+        <span>
+          waiting {queueCounts.waiting || 0}, delayed {queueCounts.delayed || 0}, active {queueCounts.active || 0}, failed{" "}
+          {queueCounts.failed || 0}
+        </span>
       </div>
       <div className="recipient-status-list">
         {recent.map((item) => (
