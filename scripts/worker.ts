@@ -109,7 +109,7 @@ const worker = new Worker<SendJobData>(
     });
 
     try {
-      const gmailMessageId = await sendGmailMessage({
+      const sendResult = await sendGmailMessage({
         userId: campaign.ownerId,
         to: recipient.email,
         fromName: campaign.fromName,
@@ -124,7 +124,7 @@ const worker = new Worker<SendJobData>(
         where: { id: item.id },
         data: {
           status: CampaignRecipientStatus.sent,
-          gmailMessageId,
+          gmailMessageId: sendResult.gmailMessageId,
           sentAt: new Date(),
           errorMessage: null,
         },
@@ -134,7 +134,7 @@ const worker = new Worker<SendJobData>(
           campaignId: campaign.id,
           campaignRecipientId: item.id,
           type: EmailEventType.sent,
-          metadata: { gmailMessageId },
+          metadata: sendResult,
         },
       });
       await markCampaignCompleteIfDone(campaign.id);

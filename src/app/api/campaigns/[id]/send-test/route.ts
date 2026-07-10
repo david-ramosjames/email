@@ -39,7 +39,7 @@ export async function POST(request: Request, context: Context) {
       mailingAddress: campaign.mailingAddress,
       unsubscribeUrl,
     });
-    const gmailMessageId = await sendGmailMessage({
+    const sendResult = await sendGmailMessage({
       userId: session.user.id,
       to,
       fromName: campaign.fromName,
@@ -58,7 +58,7 @@ export async function POST(request: Request, context: Context) {
       data: {
         campaignId: id,
         type: EmailEventType.test_sent,
-        metadata: { to, gmailMessageId },
+        metadata: { to, ...sendResult },
       },
     });
     await auditLog({
@@ -69,7 +69,7 @@ export async function POST(request: Request, context: Context) {
       metadata: { to },
     });
 
-    return NextResponse.json({ ok: true, gmailMessageId });
+    return NextResponse.json({ ok: true, ...sendResult });
   } catch (error) {
     return apiError(error);
   }

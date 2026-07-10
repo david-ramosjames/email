@@ -125,6 +125,22 @@ async function gmailClientForSending(userId: string) {
   return gmailClientForUser(userId);
 }
 
+function sendAuthDetails() {
+  const config = workspaceDelegationConfig();
+
+  if (config) {
+    return {
+      authMode: "workspace_domain_wide_delegation",
+      delegatedUser: config.delegatedUser,
+    };
+  }
+
+  return {
+    authMode: "signed_in_user_oauth",
+    delegatedUser: null,
+  };
+}
+
 async function saveConfiguredWorkspaceAliases(userId: string) {
   const aliases = configuredWorkspaceSendAliases();
 
@@ -303,6 +319,7 @@ export async function sendGmailMessage({
 }) {
   await assertVerifiedAlias(userId, fromEmail);
   const gmail = await gmailClientForSending(userId);
+  const authDetails = sendAuthDetails();
   const message = await new MailComposer({
     from: `"${fromName.replaceAll('"', "'")}" <${fromEmail}>`,
     to,
@@ -311,6 +328,14 @@ export async function sendGmailMessage({
     html,
     text,
   }).compile().build();
+
+  console.info("Sending Gmail message", {
+    authMode: authDetails.authMode,
+    delegatedUser: authDetails.delegatedUser,
+    fromEmail,
+    replyTo,
+    to,
+  });
 
   const raw = message
     .toString("base64")
@@ -323,5 +348,11 @@ export async function sendGmailMessage({
     requestBody: { raw },
   });
 
-  return response.data.id || "";
+  return {
+    gmailMessageId: response.data.id || "",
+    fromEmail,
+    replyTo,
+    authMode: authDetails.authMode,
+    delegatedUser: authDetails.delegatedUser,
+  };
 }
