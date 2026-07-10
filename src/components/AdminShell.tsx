@@ -159,8 +159,10 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
   }, [selected]);
   const pendingRecipients = stats.pending || 0;
   const testSent = Boolean(selected?.testSentAt);
+  const hasUnsavedChanges = campaignHasUnsavedChanges(selected, form);
   const canLaunch =
     Boolean(selected) &&
+    !hasUnsavedChanges &&
     testSent &&
     pendingRecipients > 0 &&
     selected?.status !== "sending" &&
@@ -456,9 +458,17 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
               <Stats stats={stats} />
               <div className="readiness-list">
                 <ReadinessItem ready={Boolean(selected)} label="Campaign saved" />
+                <ReadinessItem ready={!hasUnsavedChanges} label={hasUnsavedChanges ? "Unsaved changes" : "Current edits saved"} />
                 <ReadinessItem ready={pendingRecipients > 0} label={`${pendingRecipients} pending recipients`} />
                 <ReadinessItem ready={testSent} label={testSent ? "Test email sent" : "Test email required"} />
               </div>
+              {selected && (
+                <div className={hasUnsavedChanges ? "sender-summary warning" : "sender-summary"}>
+                  <strong>Saved sender</strong>
+                  <span>{selected.fromName} &lt;{selected.fromEmailAlias}&gt;</span>
+                  {hasUnsavedChanges && <em>Save campaign before testing or launching.</em>}
+                </div>
+              )}
               <div className="button-stack">
                 <button onClick={() => setActive("recipients")} disabled={!selected || busy}>
                   <Users size={18} />
@@ -466,7 +476,8 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                 </button>
                 <button
                   onClick={() => action(`/api/campaigns/${selected?.id}/send-test`, "Test email sent.", { to: userEmail })}
-                  disabled={!selected || busy}
+                  disabled={!selected || hasUnsavedChanges || busy}
+                  title={hasUnsavedChanges ? "Save campaign changes before sending a test." : "Send a test to your admin email"}
                 >
                   <TestTube2 size={18} />
                   Send test
@@ -478,7 +489,13 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
                     void action(`/api/campaigns/${selected?.id}/launch`, "Campaign queued.");
                   }}
                   disabled={!canLaunch || busy}
-                  title={!canLaunch ? "Save the campaign, add recipients, and send a test first." : "Queue pending recipients"}
+                  title={
+                    hasUnsavedChanges
+                      ? "Save campaign changes before launching."
+                      : !canLaunch
+                        ? "Save the campaign, add recipients, and send a test first."
+                        : "Queue pending recipients"
+                  }
                 >
                   <Send size={18} />
                   Launch campaign
@@ -736,6 +753,24 @@ function Stats({ stats }: { stats: Record<string, number> }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function campaignHasUnsavedChanges(campaign: Campaign | null, form: typeof blankCampaign) {
+  if (!campaign) return false;
+
+  return (
+    campaign.name !== form.name ||
+    campaign.subjectLine !== form.subjectLine ||
+    campaign.fromName !== form.fromName ||
+    campaign.fromEmailAlias !== form.fromEmailAlias ||
+    campaign.replyToEmail !== form.replyToEmail ||
+    campaign.htmlBody !== form.htmlBody ||
+    campaign.textBody !== form.textBody ||
+    campaign.businessIdentity !== form.businessIdentity ||
+    campaign.mailingAddress !== form.mailingAddress ||
+    campaign.throttlePerHour !== form.throttlePerHour ||
+    campaign.errorRateStopPercent !== form.errorRateStopPercent
   );
 }
 

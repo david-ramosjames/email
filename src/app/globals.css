@@ -432,6 +432,32 @@ button:disabled {
   font-weight: 700;
 }
 
+.sender-summary {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcf9;
+}
+
+.sender-summary span,
+.sender-summary em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.sender-summary.warning {
+  border-color: #d8c69e;
+  background: #fff6dc;
+}
+
+.sender-summary.warning em {
+  color: #674910;
+  font-weight: 700;
+}
+
 .send-progress {
   display: grid;
   gap: 10px;
