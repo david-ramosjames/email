@@ -755,7 +755,7 @@ function sendStatusText(campaign: Campaign | null, stats: Record<string, number>
   if ((stats.queued || 0) > 0) return "Queued means the worker has not processed those recipients yet.";
   if ((stats.pending || 0) === 0) return "Add recipients before launching.";
   if (!campaign.testSentAt) return "Send a test email before launching.";
-  return "Ready to launch pending recipients. Sent recipients will not be queued again.";
+  return "Ready to launch. Pending recipients will not send until you click Launch campaign.";
 }
 
 function SendProgress({
@@ -770,6 +770,14 @@ function SendProgress({
   queueStatus: QueueStatus | null;
 }) {
   const total = stats.total || 0;
+  const hasSendActivity =
+    campaign?.status === "sending" ||
+    campaign?.status === "completed" ||
+    (stats.queued || 0) > 0 ||
+    (stats.sent || 0) > 0 ||
+    (stats.failed || 0) > 0 ||
+    (stats.skipped || 0) > 0 ||
+    (stats.unsubscribed || 0) > 0;
   const finished =
     (stats.sent || 0) + (stats.failed || 0) + (stats.skipped || 0) + (stats.unsubscribed || 0);
   const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
@@ -777,7 +785,7 @@ function SendProgress({
   const workerCount = queueStatus?.workers.length || 0;
   const queueCounts = queueStatus?.counts || {};
 
-  if (!campaign || total === 0) return null;
+  if (!campaign || total === 0 || !hasSendActivity) return null;
 
   return (
     <div className="send-progress">
