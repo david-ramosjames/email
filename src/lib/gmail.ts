@@ -3,6 +3,33 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { decryptToken, encryptToken } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 
+const gmailScopes = [
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.settings.basic",
+];
+
+function cleanEnv(value?: string) {
+  return value?.trim().replace(/^["']|["']$/g, "") || "";
+}
+
+function serviceAccountPrivateKey() {
+  return cleanEnv(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, "\n");
+}
+
+export function workspaceDelegationConfig() {
+  const clientEmail = cleanEnv(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
+  const privateKey = serviceAccountPrivateKey();
+  const delegatedUser = cleanEnv(process.env.GOOGLE_WORKSPACE_IMPERSONATED_USER).toLowerCase();
+
+  if (!clientEmail || !privateKey || !delegatedUser) return null;
+
+  return { clientEmail, privateKey, delegatedUser };
+}
+
+export function isWorkspaceDelegationEnabled() {
+  return workspaceDelegationConfig() !== null;
+}
+
 export async function getGoogleAccount(userId: string) {
   const account = await prisma.account.findFirst({
     where: { userId, provider: "google" },
@@ -42,39 +69,75 @@ export async function gmailClientForUser(userId: string) {
   return google.gmail({ version: "v1", auth: oauth2 });
 }
 
+export async function delegatedGmailClient() {
+  const config = workspaceDelegationConfig();
+
+  if (!config) {
+    throw new Error(
+      "Google Workspace delegated sending is not configured. Set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY, and GOOGLE_WORKSPACE_IMPERSONATED_USER.",
+    );
+  }
+
+  const auth = new google.auth.JWT({
+    email: config.clientEmail,
+    key: config.privateKey,
+    scopes: gmailScopes,
+    subject: config.delegatedUser,
+  });
+
+  await auth.authorize();
+
+  return google.gmail({ version: "v1", auth });
+}
+
+async function gmailClientForSending(userId: string) {
+  if (isWorkspaceDelegationEnabled()) {
+    return delegatedGmailClient();
+  }
+
+  return gmailClientForUser(userId);
+}
+
 export async function syncSendAliases(userId: string) {
-  const gmail = await gmailClientForUser(userId);
+  const gmail = isWorkspaceDelegationEnabled()
+    ? await delegatedGmailClient()
+    : await gmailClientForUser(userId);
   const response = await gmail.users.settings.sendAs.list({ userId: "me" });
   const aliases = response.data.sendAs || [];
+  const verificationSource = isWorkspaceDelegationEnabled()
+    ? "workspace_domain_wide_delegation"
+    : "gmail_send_as";
 
   const saved = await Promise.all(
     aliases
       .filter((alias) => Boolean(alias.sendAsEmail))
       .map((alias) =>
-      prisma.sendAlias.upsert({
-        where: {
-          userId_email: {
+        prisma.sendAlias.upsert({
+          where: {
+            userId_email: {
+              userId,
+              email: (alias.sendAsEmail || "").toLowerCase(),
+            },
+          },
+          update: {
+            displayName: alias.displayName,
+            replyTo: alias.replyToAddress,
+            isDefault: Boolean(alias.isDefault),
+            isVerified: alias.verificationStatus === "accepted",
+            verificationSource,
+            lastSyncedAt: new Date(),
+          },
+          create: {
             userId,
             email: (alias.sendAsEmail || "").toLowerCase(),
+            displayName: alias.displayName,
+            replyTo: alias.replyToAddress,
+            isDefault: Boolean(alias.isDefault),
+            isVerified: alias.verificationStatus === "accepted",
+            verificationSource,
           },
-        },
-        update: {
-          displayName: alias.displayName,
-          replyTo: alias.replyToAddress,
-          isDefault: Boolean(alias.isDefault),
-          isVerified: alias.verificationStatus === "accepted",
-          lastSyncedAt: new Date(),
-        },
-        create: {
-          userId,
-          email: (alias.sendAsEmail || "").toLowerCase(),
-          displayName: alias.displayName,
-          replyTo: alias.replyToAddress,
-          isDefault: Boolean(alias.isDefault),
-          isVerified: alias.verificationStatus === "accepted",
-        },
-      }),
-    ),
+        }),
+      ),
   );
 
   return saved.filter((alias) => Boolean(alias.email));
@@ -116,7 +179,7 @@ export async function sendGmailMessage({
   text: string;
 }) {
   await assertVerifiedAlias(userId, fromEmail);
-  const gmail = await gmailClientForUser(userId);
+  const gmail = await gmailClientForSending(userId);
   const message = await new MailComposer({
     from: `"${fromName.replaceAll('"', "'")}" <${fromEmail}>`,
     to,
