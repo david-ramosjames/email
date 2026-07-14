@@ -401,6 +401,23 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
     }
   }
 
+  async function syncBounces() {
+    setBusy(true);
+    setNotice("");
+    try {
+      const data = await api("/api/bounces/sync", { method: "POST" });
+      await loadSuppressions();
+      if (selected) await loadCampaign(selected.id);
+      setNotice(
+        `Bounce sync complete: ${data.processed} processed, ${data.suppressed} suppressed, ${data.matched} matched to recipients.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not sync bounces.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -637,7 +654,13 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
               </div>
             </div>
             <div className="panel">
-              <h2>Do-not-contact list</h2>
+              <div className="panel-heading">
+                <h2>Do-not-contact list</h2>
+                <button onClick={syncBounces} disabled={busy}>
+                  <RefreshCw size={18} />
+                  Sync bounces
+                </button>
+              </div>
               <div className="data-table">
                 {suppressions.map((item) => (
                   <div className="data-row" key={item.id}>
@@ -691,7 +714,11 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
               </div>
               <div>
                 <strong>Tracking</strong>
-                <span>Send, failure, skipped, test, unsubscribe, and queue events are logged. Opens/clicks are not enabled.</span>
+                <span>Send, failure, skipped, test, unsubscribe, bounce, queue, and optional open events are logged.</span>
+              </div>
+              <div>
+                <strong>Bounces</strong>
+                <span>Sync bounces from Gmail to suppress hard-bounced addresses with the delivery reason.</span>
               </div>
             </div>
           </section>

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const gmailSendScopes = ["https://www.googleapis.com/auth/gmail.send"];
 const gmailAliasScopes = ["https://www.googleapis.com/auth/gmail.settings.basic"];
+const gmailReadScopes = ["https://www.googleapis.com/auth/gmail.readonly"];
 
 function cleanEnv(value?: string) {
   return value?.trim().replace(/^["']|["']$/g, "") || "";
@@ -120,6 +121,14 @@ export async function delegatedGmailClient(scopes = gmailSendScopes) {
 async function gmailClientForSending(userId: string) {
   if (isWorkspaceDelegationEnabled()) {
     return delegatedGmailClient(gmailSendScopes);
+  }
+
+  return gmailClientForUser(userId);
+}
+
+export async function gmailClientForReading(userId: string) {
+  if (isWorkspaceDelegationEnabled()) {
+    return delegatedGmailClient(gmailReadScopes);
   }
 
   return gmailClientForUser(userId);
@@ -307,6 +316,7 @@ export async function sendGmailMessage({
   subject,
   html,
   text,
+  headers,
 }: {
   userId: string;
   to: string;
@@ -316,6 +326,7 @@ export async function sendGmailMessage({
   subject: string;
   html: string;
   text: string;
+  headers?: Record<string, string>;
 }) {
   await assertVerifiedAlias(userId, fromEmail);
   const gmail = await gmailClientForSending(userId);
@@ -325,6 +336,10 @@ export async function sendGmailMessage({
     to,
     replyTo,
     subject,
+    headers: {
+      "X-Referral-Outreach": "true",
+      ...headers,
+    },
     html,
     text,
   }).compile().build();

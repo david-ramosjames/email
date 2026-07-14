@@ -122,6 +122,10 @@ const worker = new Worker<SendJobData>(
         subject: personalize(campaign.subjectLine, fields),
         html: trackedHtml,
         text: withFooter.text,
+        headers: {
+          "X-Referral-Campaign": campaign.id,
+          "X-Referral-Campaign-Recipient": item.id,
+        },
       });
 
       await prisma.campaignRecipient.update({
