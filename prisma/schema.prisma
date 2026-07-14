@@ -30,6 +30,7 @@ enum EmailEventType {
   failed
   skipped
   unsubscribed
+  opened
   reply
 }
 
@@ -130,6 +131,7 @@ model Campaign {
   textBody             String         @db.Text
   businessIdentity     String
   mailingAddress       String         @db.Text
+  trackOpens           Boolean        @default(true)
   throttlePerHour      Int            @default(25)
   errorRateStopPercent Int            @default(20)
   status               CampaignStatus @default(draft)

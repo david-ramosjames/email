@@ -4,6 +4,7 @@ import { addComplianceFooter, normalizeEmail, personalize } from "../src/lib/ema
 import { prisma } from "../src/lib/prisma";
 import { redisConnection, SEND_QUEUE_NAME, SendJobData } from "../src/lib/queue";
 import { sendGmailMessage } from "../src/lib/gmail";
+import { injectOpenTrackingPixel, openTrackingUrl } from "../src/lib/tracking";
 
 async function shouldStopForErrorRate(campaignId: string, threshold: number) {
   const [failed, sent] = await Promise.all([
@@ -107,6 +108,9 @@ const worker = new Worker<SendJobData>(
       mailingAddress: campaign.mailingAddress,
       unsubscribeUrl,
     });
+    const trackedHtml = campaign.trackOpens
+      ? injectOpenTrackingPixel(withFooter.html, openTrackingUrl(item.id))
+      : withFooter.html;
 
     try {
       const sendResult = await sendGmailMessage({
@@ -116,7 +120,7 @@ const worker = new Worker<SendJobData>(
         fromEmail: campaign.fromEmailAlias,
         replyTo: campaign.replyToEmail,
         subject: personalize(campaign.subjectLine, fields),
-        html: withFooter.html,
+        html: trackedHtml,
         text: withFooter.text,
       });
 

@@ -73,12 +73,17 @@ type Campaign = {
   textBody: string;
   businessIdentity: string;
   mailingAddress: string;
+  trackOpens: boolean;
   throttlePerHour: number;
   errorRateStopPercent: number;
   status: string;
   testSentAt?: string | null;
   campaignRecipients?: CampaignRecipient[];
   stats?: Record<string, number>;
+  metrics?: {
+    totalOpens: number;
+    uniqueOpens: number;
+  };
 };
 
 type Suppression = {
@@ -106,6 +111,7 @@ const blankCampaign = {
     "Hi {{first_name}},\n\nI wanted to reach out about referral opportunities in {{practice_area}} around {{city}}.\n\nBest,\n{{sender_name}}",
   businessIdentity: process.env.NEXT_PUBLIC_DEFAULT_BUSINESS_IDENTITY || "",
   mailingAddress: process.env.NEXT_PUBLIC_DEFAULT_MAILING_ADDRESS || "",
+  trackOpens: true,
   throttlePerHour: 25,
   errorRateStopPercent: 20,
 };
@@ -226,6 +232,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
       textBody: data.campaign.textBody,
       businessIdentity: data.campaign.businessIdentity,
       mailingAddress: data.campaign.mailingAddress,
+      trackOpens: data.campaign.trackOpens,
       throttlePerHour: data.campaign.throttlePerHour,
       errorRateStopPercent: data.campaign.errorRateStopPercent,
     });
@@ -246,7 +253,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
     setQueueStatus(data);
   }
 
-  function setField(key: keyof typeof form, value: string | number) {
+  function setField(key: keyof typeof form, value: string | number | boolean) {
     setForm((current) => {
       if (key === "fromEmailAlias" && typeof value === "string" && !current.replyToEmail) {
         return { ...current, fromEmailAlias: value, replyToEmail: value };
@@ -479,7 +486,7 @@ export function AdminShell({ userEmail }: { userEmail?: string | null }) {
 
             <div className="panel action-panel">
               <h2>Send controls</h2>
-              <Stats stats={stats} />
+              <Stats stats={stats} metrics={selected?.metrics} />
               <div className="readiness-list">
                 <ReadinessItem ready={Boolean(selected)} label="Campaign saved" />
                 <ReadinessItem ready={!hasUnsavedChanges} label={hasUnsavedChanges ? "Unsaved changes" : "Current edits saved"} />
@@ -701,7 +708,7 @@ function CampaignEditor({
 }: {
   form: typeof blankCampaign;
   aliases: Alias[];
-  setField: (key: keyof typeof blankCampaign, value: string | number) => void;
+  setField: (key: keyof typeof blankCampaign, value: string | number | boolean) => void;
 }) {
   return (
     <div className="panel editor-panel">
@@ -782,6 +789,14 @@ function CampaignEditor({
             onChange={(event) => setField("errorRateStopPercent", Number(event.target.value))}
           />
         </label>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={form.trackOpens}
+            onChange={(event) => setField("trackOpens", event.target.checked)}
+          />
+          <span>Track opens</span>
+        </label>
         <label className="wide">
           Mailing address
           <textarea value={form.mailingAddress} onChange={(event) => setField("mailingAddress", event.target.value)} />
@@ -791,17 +806,44 @@ function CampaignEditor({
   );
 }
 
-function Stats({ stats }: { stats: Record<string, number> }) {
+function Stats({
+  stats,
+  metrics,
+}: {
+  stats: Record<string, number>;
+  metrics?: { totalOpens: number; uniqueOpens: number };
+}) {
   const entries = ["total", "pending", "queued", "sent", "failed", "skipped", "unsubscribed"];
+  const sent = stats.sent || 0;
+  const uniqueOpens = metrics?.uniqueOpens || 0;
+  const totalOpens = metrics?.totalOpens || 0;
+  const openRate = sent > 0 ? Math.round((uniqueOpens / sent) * 100) : 0;
+
   return (
-    <div className="stats-grid">
-      {entries.map((entry) => (
-        <div key={entry}>
-          <strong>{stats[entry] || 0}</strong>
-          <span>{entry}</span>
+    <>
+      <div className="stats-grid">
+        {entries.map((entry) => (
+          <div key={entry}>
+            <strong>{stats[entry] || 0}</strong>
+            <span>{entry}</span>
+          </div>
+        ))}
+      </div>
+      <div className="signal-grid">
+        <div>
+          <strong>{uniqueOpens}</strong>
+          <span>unique opens</span>
         </div>
-      ))}
-    </div>
+        <div>
+          <strong>{openRate}%</strong>
+          <span>open signal</span>
+        </div>
+        <div>
+          <strong>{totalOpens}</strong>
+          <span>total opens</span>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -818,6 +860,7 @@ function campaignHasUnsavedChanges(campaign: Campaign | null, form: typeof blank
     campaign.textBody !== form.textBody ||
     campaign.businessIdentity !== form.businessIdentity ||
     campaign.mailingAddress !== form.mailingAddress ||
+    campaign.trackOpens !== form.trackOpens ||
     campaign.throttlePerHour !== form.throttlePerHour ||
     campaign.errorRateStopPercent !== form.errorRateStopPercent
   );
